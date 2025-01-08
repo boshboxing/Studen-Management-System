@@ -1,0 +1,345 @@
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <cctype>
+
+// Utility function to validate name input
+bool isValidName(const std::string& name) {
+    return std::all_of(name.begin(), name.end(), [](char c) {
+        return std::isalpha(c) || std::isspace(c);
+    });
+}
+
+// Utility function to validate age input
+bool isValidAge(const std::string& ageStr) {
+    return !ageStr.empty() && std::all_of(ageStr.begin(), ageStr.end(), ::isdigit);
+}
+
+struct Student {
+    std::string name;
+    int age;
+    std::string id;
+
+    std::string serialize() const {
+        return name + "," + std::to_string(age) + "," + id + "\n";
+    }
+
+    static Student deserialize(const std::string& line) {
+        size_t pos1 = line.find(',');
+        size_t pos2 = line.find(',', pos1 + 1);
+        return {line.substr(0, pos1), std::stoi(line.substr(pos1 + 1, pos2 - pos1 - 1)), line.substr(pos2 + 1)};
+    }
+};
+
+struct Teacher {
+    std::string name;
+    std::string id;
+
+    std::string serialize() const {
+        return name + "," + id + "\n";
+    }
+
+    static Teacher deserialize(const std::string& line) {
+        size_t pos = line.find(',');
+        return {line.substr(0, pos), line.substr(pos + 1)};
+    }
+};
+
+struct Classroom {
+    std::string name;
+    std::string teacherId;
+    std::vector<std::string> studentIds;
+
+    std::string serialize() const {
+        std::string result = name + "," + teacherId;
+        for (const auto& studentId : studentIds) {
+            result += "," + studentId;
+        }
+        return result + "\n";
+    }
+
+    static Classroom deserialize(const std::string& line) {
+        size_t pos1 = line.find(',');
+        size_t pos2 = line.find(',', pos1 + 1);
+        Classroom classroom = {line.substr(0, pos1), line.substr(pos1 + 1, pos2 - pos1 - 1)};
+        size_t current = pos2 + 1, next;
+        while ((next = line.find(',', current)) != std::string::npos) {
+            classroom.studentIds.push_back(line.substr(current, next - current));
+            current = next + 1;
+        }
+        classroom.studentIds.push_back(line.substr(current));
+        return classroom;
+    }
+};
+
+class SchoolManager {
+    std::vector<Student> students;
+    std::vector<Teacher> teachers;
+    std::vector<Classroom> classrooms;
+
+    const std::string studentFile = "students.txt";
+    const std::string teacherFile = "teachers.txt";
+    const std::string classroomFile = "classrooms.txt";
+
+public:
+    // Load and save methods
+    void loadFromFile() {
+        loadEntities(studentFile, students);
+        loadEntities(teacherFile, teachers);
+        loadEntities(classroomFile, classrooms);
+    }
+
+    template <typename T>
+    void loadEntities(const std::string& fileName, std::vector<T>& entities) {
+        entities.clear();
+        std::ifstream file(fileName);
+        std::string line;
+        while (std::getline(file, line)) {
+            entities.push_back(T::deserialize(line));
+        }
+        file.close();
+    }
+
+    template <typename T>
+    void saveEntities(const std::string& fileName, const std::vector<T>& entities) {
+        std::ofstream file(fileName, std::ios::trunc);
+        for (const auto& entity : entities) {
+            file << entity.serialize();
+        }
+        file.close();
+    }
+
+    // Add Student with Enhanced Validation
+    void addStudent() {
+        std::string name, id, ageStr;
+        int age;
+
+        std::cout << "Enter Student Name: ";
+        std::cin.ignore();
+        std::getline(std::cin, name);
+
+        while (!isValidName(name)) {
+            std::cout << "Invalid name. Please enter a valid name (alphabets and spaces only): ";
+            std::getline(std::cin, name);
+        }
+
+        std::cout << "Enter Student Age: ";
+        std::getline(std::cin, ageStr);
+
+        while (!isValidAge(ageStr)) {
+            std::cout << "Invalid age. Please enter a valid number: ";
+            std::getline(std::cin, ageStr);
+        }
+        age = std::stoi(ageStr);
+
+        std::cout << "Enter Student ID: ";
+        std::cin >> id;
+
+        students.push_back({name, age, id});
+        saveEntities(studentFile, students);
+    }
+
+    // Add Teacher with Enhanced Validation
+    void addTeacher() {
+        std::string name, id;
+
+        std::cout << "Enter Teacher Name: ";
+        std::cin.ignore();
+        std::getline(std::cin, name);
+
+        while (!isValidName(name)) {
+            std::cout << "Invalid name. Please enter a valid name (alphabets and spaces only): ";
+            std::getline(std::cin, name);
+        }
+
+        std::cout << "Enter Teacher ID: ";
+        std::cin >> id;
+
+        teachers.push_back({name, id});
+        saveEntities(teacherFile, teachers);
+    }
+
+    // Add Classroom
+    void addClassroom() {
+        std::string name;
+        std::cout << "Enter Classroom Name: ";
+        std::cin.ignore();
+        std::getline(std::cin, name);
+
+        classrooms.push_back({name, "", {}});
+        saveEntities(classroomFile, classrooms);
+    }
+
+    // Assign Teacher to Classroom
+    void assignTeacherToClassroom() {
+        std::string teacherId, classroomName;
+        std::cout << "Enter Teacher ID: ";
+        std::cin >> teacherId;
+        std::cout << "Enter Classroom Name: ";
+        std::cin.ignore();
+        std::getline(std::cin, classroomName);
+
+        auto it = std::find_if(classrooms.begin(), classrooms.end(),
+                               [&classroomName](const Classroom& c) { return c.name == classroomName; });
+        if (it != classrooms.end()) {
+            it->teacherId = teacherId;
+            saveEntities(classroomFile, classrooms);
+        } else {
+            std::cout << "Classroom not found.\n";
+        }
+    }
+
+    // Add Student to Classroom
+    void addStudentToClassroom() {
+        std::string studentId, classroomName;
+        std::cout << "Enter Student ID: ";
+        std::cin >> studentId;
+        std::cout << "Enter Classroom Name: ";
+        std::cin.ignore();
+        std::getline(std::cin, classroomName);
+
+        auto it = std::find_if(classrooms.begin(), classrooms.end(),
+                               [&classroomName](const Classroom& c) { return c.name == classroomName; });
+        if (it != classrooms.end()) {
+            it->studentIds.push_back(studentId);
+            saveEntities(classroomFile, classrooms);
+        } else {
+            std::cout << "Classroom not found.\n";
+        }
+    }
+
+    // Remove Student
+    void removeStudent() {
+        std::string id;
+        std::cout << "Enter Student ID to Remove: ";
+        std::cin >> id;
+
+        auto it = std::remove_if(students.begin(), students.end(), [&id](const Student& s) { return s.id == id; });
+        if (it != students.end()) {
+            students.erase(it, students.end());
+            saveEntities(studentFile, students);
+            std::cout << "Student removed successfully.\n";
+        } else {
+            std::cout << "Student not found.\n";
+        }
+    }
+
+    // Remove Teacher
+    void removeTeacher() {
+        std::string id;
+        std::cout << "Enter Teacher ID to Remove: ";
+        std::cin >> id;
+
+        auto it = std::remove_if(teachers.begin(), teachers.end(), [&id](const Teacher& t) { return t.id == id; });
+        if (it != teachers.end()) {
+            teachers.erase(it, teachers.end());
+            saveEntities(teacherFile, teachers);
+            std::cout << "Teacher removed successfully.\n";
+        } else {
+            std::cout << "Teacher not found.\n";
+        }
+    }
+
+    // Remove Classroom
+    void removeClassroom() {
+        std::string name;
+        std::cout << "Enter Classroom Name to Remove: ";
+        std::cin.ignore();
+        std::getline(std::cin, name);
+
+        auto it = std::remove_if(classrooms.begin(), classrooms.end(),
+                                 [&name](const Classroom& c) { return c.name == name; });
+        if (it != classrooms.end()) {
+            classrooms.erase(it, classrooms.end());
+            saveEntities(classroomFile, classrooms);
+            std::cout << "Classroom removed successfully.\n";
+        } else {
+            std::cout << "Classroom not found.\n";
+        }
+    }
+
+    // Display Methods
+    void displayStudents() const {
+        for (const auto& student : students) {
+            std::cout << "Name: " << student.name << ", Age: " << student.age << ", ID: " << student.id << std::endl;
+        }
+    }
+
+    void displayTeachers() const {
+        for (const auto& teacher : teachers) {
+            std::cout << "Name: " << teacher.name << ", ID: " << teacher.id << std::endl;
+        }
+    }
+
+    void displayClassrooms() const {
+        for (const auto& classroom : classrooms) {
+            std::cout << "Classroom: " << classroom.name
+                      << ", Teacher ID: " << classroom.teacherId
+                      << ", Students: ";
+            for (const auto& studentId : classroom.studentIds) {
+                std::cout << studentId << " ";
+            }
+            std::cout << std::endl;
+        }
+    }
+};
+
+int main() {
+    SchoolManager manager;
+
+    manager.loadFromFile();
+
+    int choice;
+    do {
+        std::cout << "\n1. Add Student\n2. Add Teacher\n3. Add Classroom\n4. Assign Teacher to Classroom\n"
+                     "5. Add Student to Classroom\n6. Display Students\n7. Display Teachers\n8. Display Classrooms\n"
+                     "9. Remove Student\n10.Remove Teacher\n11.Remove Classroom\n12.Exit\n"
+                     "Enter your choice: ";
+        std::cin >> choice;
+
+        switch (choice) {
+            case 1:
+                manager.addStudent();
+                break;
+            case 2:
+                manager.addTeacher();
+                break;
+            case 3:
+                manager.addClassroom();
+                break;
+            case 4:
+                manager.assignTeacherToClassroom();
+                break;
+            case 5:
+                manager.addStudentToClassroom();
+                break;
+            case 6:
+                manager.displayStudents();
+                break;
+            case 7:
+                manager.displayTeachers();
+                break;
+            case 8:
+                manager.displayClassrooms();
+                break;
+            case 9:
+                manager.removeStudent();
+                break;
+            case 10:
+                manager.removeTeacher();
+                break;
+            case 11:
+                manager.removeClassroom();
+                break;
+            case 12:
+                std::cout << "Exiting...\n";
+                break;
+            default:
+                std::cout << "Invalid choice. Try again.\n";
+        }
+    } while (choice != 12);
+
+    return 0;
+}
